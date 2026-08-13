@@ -1,0 +1,9 @@
+{
+  "input": {
+    "search": "prisma",
+    "published": "true",
+    "page": "2",
+    "limit": "5"
+  },
+  "expected": { "skip": 5, "take": 5, "published": true }
+}

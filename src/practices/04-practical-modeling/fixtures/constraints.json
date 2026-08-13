@@ -1,0 +1,21 @@
+{
+  "entities": [
+    "Customer",
+    "Booking",
+    "Ticket",
+    "Screening",
+    "Movie",
+    "Theater",
+    "Seat"
+  ],
+  "relations": [
+    "Customer ||--o{ Booking",
+    "Booking ||--|{ Ticket",
+    "Screening ||--o{ Ticket",
+    "Seat ||--o{ Ticket",
+    "Movie ||--o{ Screening",
+    "Theater ||--o{ Screening",
+    "Theater ||--|{ Seat"
+  ],
+  "uniqueFields": ["Customer.email", "Seat.seatNumber"]
+}

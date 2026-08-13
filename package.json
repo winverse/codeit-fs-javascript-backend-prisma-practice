@@ -1,0 +1,46 @@
+{
+  "name": "codeit-fs-javascript-backend-prisma-practice",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/problems.test.js",
+    "test:answers": "node --test scripts/verify-answers.js",
+    "check:01": "node --test --test-name-pattern='^01 ' test/problems.test.js",
+    "check:02": "node --test --test-name-pattern='^02 ' test/problems.test.js",
+    "check:03": "node --test --test-name-pattern='^03 ' test/problems.test.js",
+    "check:04": "node --test --test-name-pattern='^04 ' test/problems.test.js",
+    "check:05": "node --test --test-name-pattern='^05 ' test/problems.test.js",
+    "check:06": "node --test --test-name-pattern='^06 ' test/problems.test.js",
+    "check:07": "node --test --test-name-pattern='^07 ' test/problems.test.js",
+    "check:08": "node --test --test-name-pattern='^08 ' test/problems.test.js",
+    "check:09": "node --test --test-name-pattern='^09 ' test/problems.test.js",
+    "check:10": "node --test --test-name-pattern='^10 ' test/problems.test.js",
+    "check:11": "node --test --test-name-pattern='^11 ' test/problems.test.js",
+    "check:12": "node --test --test-name-pattern='^12 ' test/problems.test.js",
+    "check:13": "node --test --test-name-pattern='^13 ' test/problems.test.js",
+    "check:14": "node --test --test-name-pattern='^14 ' test/problems.test.js",
+    "check:15": "node --test --test-name-pattern='^15 ' test/problems.test.js",
+    "verify:postgres": "node scripts/verify-postgres.js",
+    "verify:prisma-schema": "prisma validate --schema src/practices/07-prisma-model-relations/answers/prisma/schema.prisma",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-unknown",
+    "format:check": "prettier --check . --ignore-unknown"
+  },
+  "engines": {
+    "node": ">=26.7.0 <27",
+    "npm": ">=11"
+  },
+  "dependencies": {
+    "bcrypt": "6.0.0",
+    "jsonwebtoken": "9.0.3",
+    "pg": "8.23.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "10.8.1",
+    "prettier": "3.9.6",
+    "prisma": "7.9.1"
+  }
+}

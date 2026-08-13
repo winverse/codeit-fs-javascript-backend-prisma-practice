@@ -1,0 +1,5 @@
+{
+  "userMethod": "findMany",
+  "postMethod": "findMany",
+  "forbiddenAuthorFields": ["password"]
+}

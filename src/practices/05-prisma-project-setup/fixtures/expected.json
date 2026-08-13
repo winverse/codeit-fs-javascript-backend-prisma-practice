@@ -1,0 +1,4 @@
+{
+  "stdout": "Prisma practice workspace ready",
+  "scripts": ["dev", "start", "prisma:generate", "seed"]
+}

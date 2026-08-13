@@ -1,0 +1,32 @@
+{
+  "databaseName": "prisma_blog",
+  "databaseUrl": "postgresql://127.0.0.1:5432/prisma_blog",
+  "resetConfirmation": "--allow-reset=prisma_blog",
+  "users": [
+    {
+      "email": "user1@example.com",
+      "name": "Ada",
+      "posts": [{ "title": "Prisma 시작", "content": "첫 글" }]
+    },
+    {
+      "email": "user2@example.com",
+      "name": "Grace",
+      "posts": [{ "title": "관계 데이터", "content": "두 번째 글" }]
+    },
+    {
+      "email": "user3@example.com",
+      "name": "Linus",
+      "posts": [{ "title": "CRUD", "content": "세 번째 글" }]
+    },
+    {
+      "email": "user4@example.com",
+      "name": "Margaret",
+      "posts": [{ "title": "쿼리", "content": "네 번째 글" }]
+    },
+    {
+      "email": "user5@example.com",
+      "name": "Edsger",
+      "posts": [{ "title": "트랜잭션", "content": "다섯 번째 글" }]
+    }
+  ]
+}

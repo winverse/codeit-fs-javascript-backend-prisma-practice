@@ -1,0 +1,10 @@
+{
+  "requiredEntities": ["Student", "Professor", "Department", "Course"],
+  "requiredAttributes": {
+    "Student": ["id", "name", "studentNumber"],
+    "Professor": ["id", "name", "departmentId"],
+    "Department": ["id", "name"],
+    "Course": ["id", "title", "professorId"]
+  },
+  "requiredRelationshipNames": ["belongsTo", "teaches", "enrolls"]
+}

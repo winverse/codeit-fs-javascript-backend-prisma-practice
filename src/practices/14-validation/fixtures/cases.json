@@ -1,0 +1,14 @@
+{
+  "validSignup": {
+    "email": "ada@example.com",
+    "password": "password123",
+    "name": "Ada"
+  },
+  "invalidSignup": [
+    { "email": "not-email", "password": "password123", "name": "Ada" },
+    { "email": "ada@example.com", "password": "short", "name": "Ada" },
+    { "email": "ada@example.com", "password": "password123", "name": "" }
+  ],
+  "validLogin": { "email": "ada@example.com", "password": "password123" },
+  "invalidLogin": { "email": "ada@example.com", "password": "" }
+}

@@ -1,0 +1,13 @@
+{
+  "models": ["User", "Post"],
+  "requiredTokens": [
+    "provider = \"prisma-client\"",
+    "provider = \"postgresql\"",
+    "email     String   @unique",
+    "posts     Post[]",
+    "content   String?",
+    "authorId  Int",
+    "@relation(fields: [authorId], references: [id], onDelete: Cascade)",
+    "updatedAt DateTime @updatedAt"
+  ]
+}
