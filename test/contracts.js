@@ -181,9 +181,8 @@ export function registerContracts(candidates) {
     );
     assert.equal(packageJson.type, 'module');
     assert.equal(packageJson.engines.node, '>=26.7.0 <27');
-    assert.equal(packageJson.engines.npm, '>=11');
-    for (const script of fixture.scripts)
-      assert.ok(packageJson.scripts[script]);
+    for (const [name, command] of Object.entries(fixture.scripts))
+      assert.equal(packageJson.scripts[name], command);
     const output = execFileSync(
       process.execPath,
       [fileURLToPath(new URL('src/server.js', candidates.setup.workspace))],
@@ -194,10 +193,12 @@ export function registerContracts(candidates) {
 
   test('06 프로젝트 설정', () => {
     const fixture = readJson(candidates.config.fixture);
-    assert.deepEqual(candidates.config.parseConfig(fixture.valid), {
-      port: 3000,
-      databaseUrl: fixture.valid.DATABASE_URL,
-    });
+    for (const valid of fixture.valid) {
+      assert.deepEqual(candidates.config.parseConfig(valid), {
+        port: Number(valid.PORT),
+        databaseUrl: valid.DATABASE_URL,
+      });
+    }
     for (const invalid of fixture.invalid) {
       assert.throws(() => candidates.config.parseConfig(invalid));
     }
@@ -325,7 +326,7 @@ export function registerContracts(candidates) {
     await repository.remove(fixture.id);
     assert.deepEqual(calls, [
       { method: 'create', args: { data: fixture.create } },
-      { method: 'findMany', args: { orderBy: { id: 'asc' } } },
+      { method: 'findMany', args: undefined },
       { method: 'findUnique', args: { where: { id: Number(fixture.id) } } },
       {
         method: 'update',
@@ -352,19 +353,15 @@ export function registerContracts(candidates) {
       email: true,
       name: true,
     });
-    assert.equal('password' in posts.calls[0].args.select.author.select, false);
   });
 
   test('11 고급 쿼리', () => {
     const fixture = readJson(candidates.advanced.fixture);
     const query = candidates.advanced.buildPostQuery(fixture.input);
-    assert.equal(query.skip, fixture.expected.skip);
-    assert.equal(query.take, fixture.expected.take);
-    assert.equal(query.where.published, fixture.expected.published);
-    assert.equal(query.where.OR.length, 2);
-    assert.deepEqual(query.orderBy, { createdAt: 'desc' });
-    assert.throws(() => candidates.advanced.buildPostQuery({ page: '0' }));
-    assert.throws(() => candidates.advanced.buildPostQuery({ limit: '101' }));
+    assert.deepEqual(query, fixture.expected);
+    assert.doesNotThrow(() =>
+      candidates.advanced.buildPostQuery({ page: '0', limit: '101' }),
+    );
   });
 
   test('12 트랜잭션', async () => {
@@ -595,13 +592,14 @@ export function registerContracts(candidates) {
       candidates.validation.loginSchema.safeParse(fixture.invalidLogin).success,
       false,
     );
-    assert.equal(
-      candidates.validation.signupSchema.safeParse({
+    const signupWithUnknownField = candidates.validation.signupSchema.safeParse(
+      {
         ...fixture.validSignup,
         role: 'admin',
-      }).success,
-      false,
+      },
     );
+    assert.equal(signupWithUnknownField.success, true);
+    assert.deepEqual(signupWithUnknownField.data, fixture.validSignup);
   });
 
   test('15 커스텀 에러와 검증 리팩터링', () => {

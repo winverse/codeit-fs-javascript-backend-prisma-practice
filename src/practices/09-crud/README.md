@@ -15,4 +15,4 @@ Prisma user delegate를 사용하는 Repository의 생성·전체 조회·단건
 
 ## 성공·실패 기준
 
-각 메서드가 올바른 delegate와 `data`, `where`, `orderBy` 인수를 한 번씩 전달하면 성공합니다. ID 변환 누락이나 잘못된 Prisma 메서드·인수는 실패합니다.
+각 메서드가 올바른 delegate와 `data`, `where` 인수를 한 번씩 전달하면 성공합니다. ID 변환 누락이나 잘못된 Prisma 메서드·인수는 실패합니다.

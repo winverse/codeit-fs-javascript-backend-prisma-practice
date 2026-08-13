@@ -1,4 +1,7 @@
 {
-  "stdout": "Prisma practice workspace ready",
-  "scripts": ["dev", "start", "prisma:generate", "seed"]
+  "stdout": "[development] Server running at http://localhost:5001",
+  "scripts": {
+    "dev": "nodemon --env-file=./env/.env.development ./src/server.js",
+    "prod": "node --env-file=./env/.env.production src/server.js"
+  }
 }

@@ -5,5 +5,22 @@
     "page": "2",
     "limit": "5"
   },
-  "expected": { "skip": 5, "take": 5, "published": true }
+  "expected": {
+    "where": {
+      "OR": [
+        { "title": { "contains": "prisma", "mode": "insensitive" } },
+        {
+          "author": {
+            "is": {
+              "name": { "contains": "prisma", "mode": "insensitive" }
+            }
+          }
+        }
+      ],
+      "published": true
+    },
+    "orderBy": { "createdAt": "desc" },
+    "skip": 5,
+    "take": 5
+  }
 }

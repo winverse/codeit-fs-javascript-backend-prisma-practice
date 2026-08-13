@@ -1,3 +1,12 @@
+import { z } from 'zod';
+
+const databaseUrlSchema = z
+  .url()
+  .refine(
+    (url) => url.startsWith('postgresql:') || url.startsWith('postgres:'),
+    'DATABASE_URL must use postgresql: or postgres:',
+  );
+
 export function parseConfig(env) {
   const port = Number(env.PORT);
   const databaseUrl = env.DATABASE_URL?.trim();
@@ -5,9 +14,7 @@ export function parseConfig(env) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('PORT must be an integer between 1 and 65535');
   }
-  if (!databaseUrl?.startsWith('postgresql://')) {
-    throw new Error('DATABASE_URL must use postgresql://');
-  }
+  databaseUrlSchema.parse(databaseUrl);
 
   return { port, databaseUrl };
 }

@@ -4,7 +4,7 @@ export function createUserRepository(prisma) {
       return prisma.user.create({ data });
     },
     findAll() {
-      return prisma.user.findMany({ orderBy: { id: 'asc' } });
+      return prisma.user.findMany();
     },
     findById(id) {
       return prisma.user.findUnique({ where: { id: Number(id) } });

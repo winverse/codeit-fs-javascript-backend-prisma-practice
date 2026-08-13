@@ -1,1 +1,1 @@
-console.log('Prisma practice workspace ready');
+console.log('[development] Server running at http://localhost:5001');
