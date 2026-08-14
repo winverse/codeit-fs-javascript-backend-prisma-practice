@@ -31,9 +31,21 @@ export function validateIdParam(name, label) {
   };
 }
 
+export function notFoundHandler(_req, _res, next) {
+  return next(new NotFoundError('Not found'));
+}
+
 export function errorHandler(error, _req, res, _next) {
   if (error instanceof HttpError) {
     return res.status(error.status).json({ message: error.message });
+  }
+  const clientStatus = error.status ?? error.statusCode;
+  if (
+    Number.isInteger(clientStatus) &&
+    clientStatus >= 400 &&
+    clientStatus < 500
+  ) {
+    return res.status(clientStatus).json({ message: 'Bad request' });
   }
   return res.status(500).json({ message: 'Internal server error' });
 }

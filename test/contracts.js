@@ -588,9 +588,59 @@ export function registerContracts(candidates) {
       candidates.validation.loginSchema.safeParse(fixture.validLogin).success,
       true,
     );
+    for (const invalid of fixture.invalidLogin) {
+      assert.equal(
+        candidates.validation.loginSchema.safeParse(invalid).success,
+        false,
+      );
+    }
+    for (const password of ['a'.repeat(15), 'a'.repeat(72), '가'.repeat(24)]) {
+      assert.equal(
+        candidates.validation.signupSchema.safeParse({
+          ...fixture.validSignup,
+          password,
+        }).success,
+        true,
+      );
+      assert.equal(
+        candidates.validation.loginSchema.safeParse({
+          ...fixture.validLogin,
+          password,
+        }).success,
+        true,
+      );
+    }
+    for (const password of ['a'.repeat(73), '가'.repeat(25)]) {
+      assert.equal(
+        candidates.validation.signupSchema.safeParse({
+          ...fixture.validSignup,
+          password,
+        }).success,
+        false,
+      );
+      assert.equal(
+        candidates.validation.loginSchema.safeParse({
+          ...fixture.validLogin,
+          password,
+        }).success,
+        false,
+      );
+    }
+    for (const password of ['a'.repeat(14), '😀'.repeat(8)]) {
+      assert.equal(
+        candidates.validation.signupSchema.safeParse({
+          ...fixture.validSignup,
+          password,
+        }).success,
+        false,
+      );
+    }
     assert.equal(
-      candidates.validation.loginSchema.safeParse(fixture.invalidLogin).success,
-      false,
+      candidates.validation.signupSchema.safeParse({
+        ...fixture.validSignup,
+        password: '😀'.repeat(15),
+      }).success,
+      true,
     );
     const signupWithUnknownField = candidates.validation.signupSchema.safeParse(
       {
@@ -622,25 +672,58 @@ export function registerContracts(candidates) {
       assert.ok(captured instanceof candidates.errors.HttpError);
       assert.equal(captured.status, 400);
     }
-    const response = {
-      statusCode: 200,
-      body: null,
-      status(code) {
-        this.statusCode = code;
-        return this;
-      },
-      json(body) {
-        this.body = body;
-        return this;
-      },
+    const handleError = (error) => {
+      const response = {
+        statusCode: 200,
+        body: null,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(body) {
+          this.body = body;
+          return this;
+        },
+      };
+      candidates.errors.errorHandler(error, {}, response, () => {});
+      return response;
     };
-    candidates.errors.errorHandler(
+
+    const customResponse = handleError(
       new candidates.errors.HttpError(404, 'Not found'),
-      {},
-      response,
-      () => {},
     );
-    assert.equal(response.statusCode, 404);
-    assert.deepEqual(response.body, { message: 'Not found' });
+    assert.equal(customResponse.statusCode, 404);
+    assert.deepEqual(customResponse.body, { message: 'Not found' });
+
+    let notFoundError;
+    candidates.errors.notFoundHandler({}, {}, (error) => {
+      notFoundError = error;
+    });
+    assert.ok(notFoundError instanceof candidates.errors.HttpError);
+    assert.equal(notFoundError.status, 404);
+    const notFoundResponse = handleError(notFoundError);
+    assert.equal(notFoundResponse.statusCode, 404);
+    assert.deepEqual(notFoundResponse.body, { message: 'Not found' });
+
+    for (const [statusProperty, status] of [
+      ['status', 400],
+      ['statusCode', 413],
+    ]) {
+      const internalMessage = `Internal ${status} details`;
+      const error = new Error(internalMessage);
+      error[statusProperty] = status;
+      const clientResponse = handleError(error);
+      assert.equal(clientResponse.statusCode, status);
+      assert.deepEqual(clientResponse.body, { message: 'Bad request' });
+      assert.notEqual(clientResponse.body.message, internalMessage);
+    }
+
+    const internalMessage = 'Database credentials leaked';
+    const unexpectedResponse = handleError(new Error(internalMessage));
+    assert.equal(unexpectedResponse.statusCode, 500);
+    assert.deepEqual(unexpectedResponse.body, {
+      message: 'Internal server error',
+    });
+    assert.notEqual(unexpectedResponse.body.message, internalMessage);
   });
 }
