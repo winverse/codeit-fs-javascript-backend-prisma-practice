@@ -180,7 +180,7 @@ export function registerContracts(candidates) {
       new URL('package.json', candidates.setup.workspace),
     );
     assert.equal(packageJson.type, 'module');
-    assert.equal(packageJson.engines.node, '>=26.7.0 <27');
+    assert.equal(packageJson.engines.node, '>=26');
     for (const [name, command] of Object.entries(fixture.scripts))
       assert.equal(packageJson.scripts[name], command);
     const output = execFileSync(

@@ -15,4 +15,4 @@
 
 ## 성공·실패 기준
 
-ES module, Node.js 26.7 범위, `dev`·`prod` 스크립트와 `[development] Server running at http://localhost:5001` 출력이 모두 맞으면 성공합니다. 설정 누락, 실행 오류, 다른 출력은 실패합니다.
+ES module, Node.js `>=26` 범위, `dev`·`prod` 스크립트와 `[development] Server running at http://localhost:5001` 출력이 모두 맞으면 성공합니다. 설정 누락, 실행 오류, 다른 출력은 실패합니다.
