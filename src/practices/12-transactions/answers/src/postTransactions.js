@@ -16,8 +16,5 @@ export function createPostTransactions(prisma) {
         return { deletedPost, deletedCommentsCount };
       });
     },
-    createManyPosts(posts) {
-      return prisma.post.createMany({ data: posts });
-    },
   };
 }

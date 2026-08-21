@@ -7,14 +7,14 @@ CREATE TABLE "Customers" (
 CREATE TABLE "Products" (
   "id" SERIAL PRIMARY KEY,
   "name" VARCHAR(255) NOT NULL,
-  "price" INTEGER NOT NULL CHECK ("price" >= 0)
+  "price" INTEGER NOT NULL
 );
 
 CREATE TABLE "Purchases" (
   "id" SERIAL PRIMARY KEY,
   "customerId" INTEGER NOT NULL REFERENCES "Customers" ("id"),
   "productId" INTEGER NOT NULL REFERENCES "Products" ("id"),
-  "quantity" INTEGER NOT NULL DEFAULT 1 CHECK ("quantity" > 0)
+  "quantity" INTEGER NOT NULL DEFAULT 1
 );
 
 INSERT INTO "Customers" ("email", "name")

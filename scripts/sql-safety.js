@@ -14,6 +14,11 @@ const ALLOWED_IDENTIFIERS = new Set([
   'productId',
   'quantity',
 ]);
+const ALLOWED_UNQUOTED_COLUMNS = new Set(
+  [...ALLOWED_IDENTIFIERS]
+    .filter((identifier) => identifier === identifier.toLowerCase())
+    .map((identifier) => identifier.toUpperCase()),
+);
 const CREATE_WORDS = new Set([
   'CREATE',
   'TABLE',
@@ -25,8 +30,8 @@ const CREATE_WORDS = new Set([
   'UNIQUE',
   'NOT',
   'NULL',
-  'CHECK',
   'DEFAULT',
+  'FOREIGN',
   'REFERENCES',
 ]);
 
@@ -172,6 +177,13 @@ function assertAllowedIdentifiers(tokens) {
   }
 }
 
+function isColumnToken(token) {
+  return (
+    isToken(token, 'identifier') ||
+    (isToken(token, 'word') && ALLOWED_UNQUOTED_COLUMNS.has(token.value))
+  );
+}
+
 function assertCreateTable(tokens) {
   if (
     !isToken(tokens[0], 'word', 'CREATE') ||
@@ -211,12 +223,12 @@ function assertCreateTable(tokens) {
 function assertIdentifierList(tokens, cursor) {
   if (!isToken(tokens[cursor], 'symbol', '(')) throw syntaxError();
   cursor += 1;
-  if (!isToken(tokens[cursor], 'identifier')) throw syntaxError();
+  if (!isColumnToken(tokens[cursor])) throw syntaxError();
   let count = 1;
   cursor += 1;
   while (isToken(tokens[cursor], 'symbol', ',')) {
     cursor += 1;
-    if (!isToken(tokens[cursor], 'identifier')) throw syntaxError();
+    if (!isColumnToken(tokens[cursor])) throw syntaxError();
     count += 1;
     cursor += 1;
   }
@@ -275,11 +287,11 @@ function assertSelect(tokens) {
   if (isToken(tokens[cursor], 'symbol', '*')) {
     cursor += 1;
   } else {
-    if (!isToken(tokens[cursor], 'identifier')) throw syntaxError();
+    if (!isColumnToken(tokens[cursor])) throw syntaxError();
     cursor += 1;
     while (isToken(tokens[cursor], 'symbol', ',')) {
       cursor += 1;
-      if (!isToken(tokens[cursor], 'identifier')) throw syntaxError();
+      if (!isColumnToken(tokens[cursor])) throw syntaxError();
       cursor += 1;
     }
   }
@@ -296,7 +308,7 @@ function assertSelect(tokens) {
   if (
     cursor + 4 !== tokens.length ||
     !isToken(tokens[cursor], 'word', 'WHERE') ||
-    !isToken(tokens[cursor + 1], 'identifier') ||
+    !isColumnToken(tokens[cursor + 1]) ||
     !isToken(tokens[cursor + 2], 'symbol') ||
     !['=', '>', '<', '>=', '<=', '<>', '!='].includes(
       tokens[cursor + 2].value,

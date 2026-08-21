@@ -232,6 +232,28 @@ export function registerContracts(candidates) {
     assert.equal(candidates.sql.assertAllowedSqlStatements(source), true);
     assert.equal(
       candidates.sql.assertAllowedSqlStatements(`
+        CREATE TABLE "Purchases" (
+          "id" SERIAL PRIMARY KEY,
+          "customerId" INTEGER NOT NULL,
+          FOREIGN KEY ("customerId") REFERENCES "Customers"("id")
+        );
+      `),
+      true,
+    );
+    assert.equal(
+      candidates.sql.assertAllowedSqlStatements(`
+        INSERT INTO "Customers" (email, name)
+        VALUES ('course@test.com', '강의 예시');
+        INSERT INTO "Products" (name, price)
+        VALUES ('키보드', 120000);
+        INSERT INTO "Purchases" ("customerId", "productId", quantity)
+        VALUES (1, 1, 1);
+        SELECT * FROM "Products" WHERE price >= 1000000;
+      `),
+      true,
+    );
+    assert.equal(
+      candidates.sql.assertAllowedSqlStatements(`
         INSERT INTO "Customers" ("email", "name")
         VALUES ('commit@test.com', 'END;');
         SELECT * FROM "Products"
@@ -256,6 +278,7 @@ export function registerContracts(candidates) {
       'SELECT * INTO "Customers" FROM "Products";',
       'SELECT * FROM "pg_authid";',
       'INSERT INTO "Customers" ("email", "name") SELECT "email", "name" FROM "Customers";',
+      'INSERT INTO "Customers" (password) VALUES (\'secret\');',
       'CREATE TABLE "Customers" ("id" INTEGER) AS SELECT * FROM "Products";',
       'CREATE TABLE "Customers" ("id" INTEGER, "payload" TEXT);',
       'SELECT * FROM "Products" AS foo$tag$; COMMIT; SELECT * FROM "Products" AS bar$tag$;',
@@ -307,10 +330,8 @@ export function registerContracts(candidates) {
       'Customers.email must be unique',
     );
     assert.match(products, /\bprice\s+integer\s+not\s+null\b/i);
-    assert.match(products, /\bcheck\s*\(\s*price\s*>=\s*0\s*\)/i);
     assert.match(purchases, /\bquantity\s+integer\s+not\s+null\b/i);
     assert.match(purchases, /\bdefault\s+1\b/i);
-    assert.match(purchases, /\bcheck\s*\(\s*quantity\s*>\s*0\s*\)/i);
 
     for (const [column, target] of [
       ['customerId', 'Customers'],
@@ -494,7 +515,7 @@ export function registerContracts(candidates) {
       new URL('package.json', candidates.setup.workspace),
     );
     assert.equal(packageJson.type, 'module');
-    assert.equal(packageJson.engines.node, '>=26');
+    assert.equal(packageJson.engines.node, '>=26 <27');
     for (const [name, command] of Object.entries(fixture.scripts))
       assert.equal(packageJson.scripts[name], command);
     for (const [name, version] of Object.entries(fixture.devDependencies))
@@ -551,6 +572,7 @@ export function registerContracts(candidates) {
         fixture.databaseUrl,
         fixture.resetConfirmation,
         fixture.databaseName,
+        fixture.nodeEnv,
       ),
       true,
     );
@@ -564,6 +586,7 @@ export function registerContracts(candidates) {
           localUrl,
           fixture.resetConfirmation,
           fixture.databaseName,
+          fixture.nodeEnv,
         ),
         true,
       );
@@ -573,6 +596,7 @@ export function registerContracts(candidates) {
         'postgresql://database.example/prisma_blog',
         fixture.resetConfirmation,
         fixture.databaseName,
+        fixture.nodeEnv,
       ),
     );
     for (const protocol of ['https:', 'mysql:']) {
@@ -581,6 +605,7 @@ export function registerContracts(candidates) {
           `${protocol}//127.0.0.1/${fixture.databaseName}`,
           fixture.resetConfirmation,
           fixture.databaseName,
+          fixture.nodeEnv,
         ),
       );
     }
@@ -589,6 +614,7 @@ export function registerContracts(candidates) {
         'postgresql://127.0.0.1/production',
         fixture.resetConfirmation,
         fixture.databaseName,
+        fixture.nodeEnv,
       ),
     );
     assert.throws(() =>
@@ -596,8 +622,45 @@ export function registerContracts(candidates) {
         fixture.databaseUrl,
         '--allow-reset=other',
         fixture.databaseName,
+        fixture.nodeEnv,
       ),
     );
+    assert.throws(() =>
+      candidates.seeding.assertSafeSeedTarget(
+        fixture.databaseUrl,
+        fixture.resetConfirmation,
+        fixture.databaseName,
+        'production',
+      ),
+    );
+
+    let unsafeMutationCount = 0;
+    const recordUnsafeMutation = async () => {
+      unsafeMutationCount += 1;
+      return { count: 0 };
+    };
+    const unsafePrisma = {
+      post: {
+        deleteMany: recordUnsafeMutation,
+        createMany: recordUnsafeMutation,
+      },
+      user: {
+        deleteMany: recordUnsafeMutation,
+        createMany: recordUnsafeMutation,
+        findMany: recordUnsafeMutation,
+      },
+      async $transaction(operations) {
+        unsafeMutationCount += 1;
+        return Promise.all(operations);
+      },
+    };
+    await assert.rejects(() =>
+      candidates.seeding.seed(unsafePrisma, {
+        ...fixture,
+        nodeEnv: 'production',
+      }),
+    );
+    assert.equal(unsafeMutationCount, 0);
 
     const calls = [];
     const storedUsers = fixture.users.map(({ email }, index) => ({
@@ -789,23 +852,6 @@ export function registerContracts(candidates) {
     );
     assert.deepEqual(prisma.state, beforeFailedDelete);
     assert.equal(prisma.transactions.length, 4);
-
-    prisma.state.posts = [];
-    prisma.state.comments = [];
-    const transactionCountBeforeBatch = prisma.transactions.length;
-    const result = await service.createManyPosts([fixture.post, fixture.post]);
-    assert.equal(result.count, 2);
-    assert.equal(prisma.transactions.length, transactionCountBeforeBatch);
-    assert.deepEqual(prisma.operations.at(-1), {
-      scope: 'root',
-      method: 'post.createMany',
-    });
-    const beforeFailedBatch = structuredClone(prisma.state);
-    await assert.rejects(() =>
-      service.createManyPosts([fixture.post, fixture.failingPost]),
-    );
-    assert.deepEqual(prisma.state, beforeFailedBatch);
-    assert.equal(prisma.transactions.length, transactionCountBeforeBatch);
   });
 
   test('13 인증 유틸리티와 미들웨어', async () => {

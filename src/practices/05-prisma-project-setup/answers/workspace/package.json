@@ -7,7 +7,7 @@
     "prod": "node --env-file=./env/.env.production src/server.js"
   },
   "engines": {
-    "node": ">=26"
+    "node": ">=26 <27"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

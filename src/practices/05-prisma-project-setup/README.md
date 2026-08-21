@@ -27,4 +27,4 @@ npm run dev
 
 ## 성공·실패 기준
 
-ES module, Node.js `>=26` 범위, `dev`·`prod` 스크립트와 자체 설치 가능한 `nodemon` 의존성이 모두 맞아야 합니다. `dev`는 `[development] Server running at http://localhost:5001`, `prod`는 `[production] Server running at http://localhost:5001`을 출력해야 성공합니다. 환경 파일·설정 누락, 실행 오류, 다른 출력은 실패합니다.
+ES module, Node.js `>=26 <27` 범위, `dev`·`prod` 스크립트와 자체 설치 가능한 `nodemon` 의존성이 모두 맞아야 합니다. `dev`는 `[development] Server running at http://localhost:5001`, `prod`는 `[production] Server running at http://localhost:5001`을 출력해야 성공합니다. 환경 파일·설정 누락, 실행 오류, 다른 출력은 실패합니다.

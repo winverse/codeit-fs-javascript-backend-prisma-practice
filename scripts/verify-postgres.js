@@ -151,15 +151,6 @@ try {
     'INSERT INTO "Purchases" ("customerId", "productId", "quantity") VALUES (1, 999, 1)',
     '23503',
   );
-  await expectPgError(
-    'INSERT INTO "Products" ("name", "price") VALUES (\'잘못된 상품\', -1)',
-    '23514',
-  );
-  await expectPgError(
-    'INSERT INTO "Purchases" ("customerId", "productId", "quantity") VALUES (1, 1, 0)',
-    '23514',
-  );
-
   await client.query('ROLLBACK');
   const rolledBack = await client.query(
     'SELECT to_regnamespace($1) AS schema_name',

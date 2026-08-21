@@ -45,4 +45,4 @@ set "PRACTICE_DATABASE_URL="
 
 ## 성공·실패 기준
 
-성공하려면 PostgreSQL의 quoted identifier와 `SERIAL` 문법으로 세 테이블, PK·FK·UNIQUE·CHECK 제약, `Customers.email`의 `VARCHAR(255)`, `Purchases.quantity`의 `DEFAULT 1`, 제공된 행을 작성해야 합니다. 조회문은 전체 `Products`, `price`가 fixture의 `minimumPrice` 이상인 `Products`, `customerId`가 fixture 값과 같은 `Purchases`를 각각 조회합니다. `SELECT *` 또는 필요한 컬럼 목록을 사용할 수 있습니다. 동적 검증에서는 실제 PostgreSQL 18의 테이블·제약·조회 결과가 기대값과 같아야 합니다. SQLite 전용 구문, 테이블·제약·행·조회 누락, PostgreSQL 실행 오류는 실패합니다.
+성공하려면 PostgreSQL의 quoted identifier와 `SERIAL` 문법으로 세 테이블, PK·FK·UNIQUE 제약, `Customers.email`의 `VARCHAR(255)`, `Purchases.quantity`의 `DEFAULT 1`, 제공된 행을 작성해야 합니다. 조회문은 전체 `Products`, `price`가 fixture의 `minimumPrice` 이상인 `Products`, `customerId`가 fixture 값과 같은 `Purchases`를 각각 조회합니다. `SELECT *` 또는 필요한 컬럼 목록을 사용할 수 있습니다. 동적 검증에서는 실제 PostgreSQL 18의 테이블·제약·조회 결과가 기대값과 같아야 합니다. SQLite 전용 구문, 테이블·PK·FK·UNIQUE·행·조회 누락, PostgreSQL 실행 오류는 실패합니다.

@@ -11,6 +11,10 @@
 
 영화 예매 시스템에서 좌석 번호는 상영관 안에서만 고유합니다. Mermaid에는 `%% UNIQUE Seat(theaterId, seatNumber)` 주석으로 복합 고유 제약을 표시합니다. 상영은 아직 판매된 티켓이 없어도 생성할 수 있어야 합니다.
 
+영화 다이어그램에는 `Customer(id, name, email)`, `Booking(id, customerId, bookingTime)`, `Ticket(id, bookingId, screeningId, seatId)`, `Screening(id, movieId, theaterId, showtime)`, `Movie(id, title, durationInMinutes)`, `Theater(id, name, totalSeats)`, `Seat(id, theaterId, seatNumber)`를 사용합니다. `Customer.email`은 고유하고, 한 예매에는 티켓이 하나 이상, 한 상영관에는 좌석이 하나 이상 있어야 합니다.
+
+블로그에는 `User`, `Post`, `Comment`, `Tag`가 있습니다. `User.email`과 `Tag.name`은 고유하고, `Post.authorId`, `Comment.authorId`, `Comment.postId`는 각각 관계의 FK입니다. 사용자는 게시글과 댓글을 작성하고, 게시글은 댓글을 포함하며, 게시글과 태그는 선택적인 다대다 관계입니다. 각 엔티티의 정확한 필드 목록은 안전한 입력 파일인 `fixtures/constraints.json`에서 확인합니다.
+
 ## 실행 진입점
 
 `npm run check:04`

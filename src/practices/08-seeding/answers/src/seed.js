@@ -1,4 +1,9 @@
-export function assertSafeSeedTarget(databaseUrl, confirmation, databaseName) {
+export function assertSafeSeedTarget(
+  databaseUrl,
+  confirmation,
+  databaseName,
+  nodeEnv,
+) {
   let target;
   try {
     target = new URL(databaseUrl);
@@ -15,6 +20,7 @@ export function assertSafeSeedTarget(databaseUrl, confirmation, databaseName) {
   const confirmed = confirmation === `--allow-reset=${databaseName}`;
 
   if (
+    nodeEnv !== 'development' ||
     !postgresProtocol ||
     !localHost ||
     actualDatabase !== databaseName ||
@@ -25,17 +31,22 @@ export function assertSafeSeedTarget(databaseUrl, confirmation, databaseName) {
   return true;
 }
 
+async function resetBlogData(prisma) {
+  return prisma.$transaction([
+    prisma.post.deleteMany(),
+    prisma.user.deleteMany(),
+  ]);
+}
+
 export async function seed(prisma, fixture) {
   assertSafeSeedTarget(
     fixture.databaseUrl,
     fixture.resetConfirmation,
     fixture.databaseName,
+    fixture.nodeEnv,
   );
 
-  await prisma.$transaction([
-    prisma.post.deleteMany(),
-    prisma.user.deleteMany(),
-  ]);
+  await resetBlogData(prisma);
 
   const userData = fixture.users.map(({ posts: _posts, ...user }) => user);
   await prisma.user.createMany({ data: userData });
@@ -44,11 +55,14 @@ export async function seed(prisma, fixture) {
     select: { id: true, email: true },
   });
   const idsByEmail = new Map(users.map(({ email, id }) => [email, id]));
-  const postData = fixture.users.flatMap((user) =>
-    user.posts.map((post) => ({
-      ...post,
-      authorId: idsByEmail.get(user.email),
-    })),
-  );
+  const postData = [];
+  for (const user of fixture.users) {
+    for (const post of user.posts) {
+      postData.push({
+        ...post,
+        authorId: idsByEmail.get(user.email),
+      });
+    }
+  }
   await prisma.post.createMany({ data: postData });
 }
