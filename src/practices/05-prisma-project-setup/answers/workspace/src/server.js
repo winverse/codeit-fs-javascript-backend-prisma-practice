@@ -1,1 +1,3 @@
-console.log('[development] Server running at http://localhost:5001');
+console.log(
+  `[${process.env.NODE_ENV}] Server running at http://localhost:${process.env.PORT}`,
+);

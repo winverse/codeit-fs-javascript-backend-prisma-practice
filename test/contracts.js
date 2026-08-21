@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath } from 'node:url';
 import bcrypt from 'bcrypt';
 
@@ -11,6 +12,121 @@ function readText(url) {
 
 function readJson(url) {
   return JSON.parse(readText(url));
+}
+
+const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+function terminateProcessTree(child, signal = 'SIGTERM') {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === 'win32') {
+    const terminator = spawn(
+      'taskkill',
+      ['/pid', String(child.pid), '/T', '/F'],
+      { stdio: 'ignore' },
+    );
+    terminator.on('error', () => child.kill(signal));
+    return;
+  }
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+}
+
+function runUntilOutput(cwd, script, expectedOutput) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(npmExecutable, ['run', script, '--silent'], {
+      cwd,
+      detached: process.platform !== 'win32',
+      env: { ...process.env, NO_UPDATE_NOTIFIER: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    let matched = false;
+    let forceTimer;
+    const timeout = setTimeout(() => {
+      terminateProcessTree(child);
+      forceTimer = setTimeout(
+        () => terminateProcessTree(child, 'SIGKILL'),
+        1000,
+      );
+    }, 10000);
+
+    const capture = (chunk) => {
+      output += chunk;
+      if (!matched && output.includes(expectedOutput)) {
+        matched = true;
+        terminateProcessTree(child);
+        forceTimer = setTimeout(
+          () => terminateProcessTree(child, 'SIGKILL'),
+          1000,
+        );
+      }
+    };
+
+    child.stdout.on('data', capture);
+    child.stderr.on('data', capture);
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      clearTimeout(forceTimer);
+      reject(error);
+    });
+    child.on('close', (code, signal) => {
+      clearTimeout(timeout);
+      clearTimeout(forceTimer);
+      if (matched) resolve(output);
+      else {
+        reject(
+          new Error(
+            `${script} did not print the expected output (code=${code}, signal=${signal}):\n${output}`,
+          ),
+        );
+      }
+    });
+  });
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function mirrorCardinality(marker) {
+  return {
+    '||': '||',
+    'o|': '|o',
+    '|o': 'o|',
+    'o{': '}o',
+    '}o': 'o{',
+    '|{': '}|',
+    '}|': '|{',
+  }[marker];
+}
+
+function hasMermaidRelation(source, relation) {
+  const [left, edge, right] = relation.split(/\s+/);
+  const [, leftMarker, rightMarker] = edge.match(
+    /^(\|\||o\||\|o|o\{|\}o|\|\{|\}\|)--(\|\||o\||\|o|o\{|\}o|\|\{|\}\|)$/,
+  );
+  const pattern = (from, fromMarker, toMarker, to) =>
+    new RegExp(
+      `\\b${escapeRegExp(from)}\\s+${escapeRegExp(fromMarker)}\\s*--\\s*${escapeRegExp(toMarker)}\\s+${escapeRegExp(to)}\\b`,
+    );
+  return (
+    pattern(left, leftMarker, rightMarker, right).test(source) ||
+    pattern(
+      right,
+      mirrorCardinality(rightMarker),
+      mirrorCardinality(leftMarker),
+      left,
+    ).test(source)
+  );
+}
+
+function mermaidEntityBody(source, entity) {
+  return source.match(
+    new RegExp(`\\b${escapeRegExp(entity)}\\s*\\{([\\s\\S]*?)\\}`),
+  )?.[1];
 }
 
 function tamperJwt(token) {
@@ -36,19 +152,30 @@ function createRecordingDelegate(methods) {
 
 function createTransactionPrisma() {
   const state = { posts: [], comments: [] };
-  const tx = {
+  const operations = [];
+  const transactions = [];
+
+  const createDelegates = (scope) => ({
     post: {
       async create({ data }) {
+        operations.push({ scope, method: 'post.create' });
+        if (data.title === 'FAIL') throw new Error('Fixture failure');
         const post = { id: state.posts.length + 1, ...data };
         state.posts.push(post);
         return post;
       },
       async delete({ where }) {
+        operations.push({ scope, method: 'post.delete' });
+        if (where.id === 999) throw new Error('Fixture failure');
         const index = state.posts.findIndex(({ id }) => id === where.id);
         if (index < 0) throw new Error('Post not found');
         return state.posts.splice(index, 1)[0];
       },
       async createMany({ data }) {
+        operations.push({ scope, method: 'post.createMany' });
+        if (data.some(({ title }) => title === 'FAIL')) {
+          throw new Error('Fixture failure');
+        }
         for (const post of data) {
           state.posts.push({ id: state.posts.length + 1, ...post });
         }
@@ -57,22 +184,35 @@ function createTransactionPrisma() {
     },
     comment: {
       async create({ data }) {
+        operations.push({ scope, method: 'comment.create' });
         if (data.content === 'FAIL') throw new Error('Fixture failure');
         const comment = { id: state.comments.length + 1, ...data };
         state.comments.push(comment);
         return comment;
       },
       async deleteMany({ where }) {
+        operations.push({ scope, method: 'comment.deleteMany' });
+        const before = state.comments.length;
         state.comments = state.comments.filter(
           ({ postId }) => postId !== where.postId,
         );
+        return { count: before - state.comments.length };
       },
     },
-  };
+  });
+
+  const root = createDelegates('root');
+  const tx = createDelegates('transaction');
   return {
     state,
-    ...tx,
+    operations,
+    transactions,
+    ...root,
     async $transaction(callback) {
+      if (typeof callback !== 'function') {
+        throw new TypeError('A callback transaction is required');
+      }
+      transactions.push('callback');
       const snapshot = structuredClone(state);
       try {
         return await callback(tx);
@@ -89,37 +229,124 @@ export function registerContracts(candidates) {
   test('01 SQL 기본 사용법', () => {
     const expected = readJson(candidates.sql.fixture);
     const source = readText(candidates.sql.task);
-    assert.doesNotMatch(source, /\b(?:PRAGMA|sqlite_master|AUTOINCREMENT)\b/i);
-    for (const table of expected.tables) {
-      assert.match(source, new RegExp(`CREATE TABLE "${table}" \\(`));
+    assert.equal(candidates.sql.assertAllowedSqlStatements(source), true);
+    assert.equal(
+      candidates.sql.assertAllowedSqlStatements(`
+        SELECT 'COMMIT;';
+        SELECT $$END;$$;
+        SELECT 1 /* outer /* ROLLBACK; */ comment */;
+        SELECT "COMMIT";
+      `),
+      true,
+    );
+    for (const unsafeSql of [
+      'COMMIT;',
+      '-- comment\nEND;',
+      '/* comment */ ROLLBACK;',
+      'START TRANSACTION;',
+      "PREPARE TRANSACTION 'practice';",
+      'SET search_path TO public; COMMIT;',
+    ]) {
+      assert.throws(() => candidates.sql.assertAllowedSqlStatements(unsafeSql));
     }
-    assert.match(source, /"id" SERIAL PRIMARY KEY/);
-    assert.match(source, /"email" VARCHAR\(255\) UNIQUE NOT NULL/);
-    assert.match(
-      source,
-      /"customerId" INTEGER NOT NULL REFERENCES "Customers" \("id"\)/,
+    assert.doesNotMatch(source, /\b(?:PRAGMA|sqlite_master|AUTOINCREMENT)\b/i);
+    const normalized = source
+      .replace(/--.*$/gm, ' ')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replaceAll('"', '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const statements = normalized
+      .split(';')
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+    const tableBodies = new Map();
+    for (const table of expected.tables) {
+      const match = normalized.match(
+        new RegExp(
+          `create\\s+table\\s+${table}\\s*\\(([\\s\\S]*?)\\)\\s*;`,
+          'i',
+        ),
+      );
+      assert.ok(match, `CREATE TABLE ${table} is required`);
+      tableBodies.set(table, match[1]);
+      assert.match(match[1], /\bid\s+serial\b/i);
+      assert.ok(
+        /\bid\s+serial\s+primary\s+key\b/i.test(match[1]) ||
+          /\bprimary\s+key\s*\(\s*id\s*\)/i.test(match[1]),
+        `${table}.id must be a primary key`,
+      );
+    }
+
+    const customers = tableBodies.get('Customers');
+    const products = tableBodies.get('Products');
+    const purchases = tableBodies.get('Purchases');
+    assert.match(customers, /\bemail\s+varchar\(255\)[^,]*\bnot\s+null\b/i);
+    assert.ok(
+      /\bemail\s+varchar\(255\)[^,]*\bunique\b/i.test(customers) ||
+        /\bunique\s*\(\s*email\s*\)/i.test(customers),
+      'Customers.email must be unique',
     );
-    assert.match(
-      source,
-      /"productId" INTEGER NOT NULL REFERENCES "Products" \("id"\)/,
-    );
-    assert.match(source, /CHECK \("price" >= 0\)/);
-    assert.match(source, /CHECK \("quantity" > 0\)/);
-    assert.match(source, /INSERT INTO "Customers"/);
-    assert.match(source, /INSERT INTO "Products"/);
-    assert.match(source, /INSERT INTO "Purchases"/);
-    assert.match(source, /SELECT \* FROM "Products";/);
-    assert.match(
-      source,
-      new RegExp(
-        `SELECT \\* FROM "Products" WHERE "price" >= ${expected.minimumPrice};`,
+    assert.match(products, /\bprice\s+integer\s+not\s+null\b/i);
+    assert.match(products, /\bcheck\s*\(\s*price\s*>=\s*0\s*\)/i);
+    assert.match(purchases, /\bquantity\s+integer\s+not\s+null\b/i);
+    assert.match(purchases, /\bdefault\s+1\b/i);
+    assert.match(purchases, /\bcheck\s*\(\s*quantity\s*>\s*0\s*\)/i);
+
+    for (const [column, target] of [
+      ['customerId', 'Customers'],
+      ['productId', 'Products'],
+    ]) {
+      assert.match(
+        purchases,
+        new RegExp(`\\b${column}\\s+integer\\s+not\\s+null\\b`, 'i'),
+      );
+      assert.ok(
+        new RegExp(
+          `\\b${column}\\s+integer\\s+not\\s+null[^,]*\\breferences\\s+${target}\\s*\\(\\s*id\\s*\\)`,
+          'i',
+        ).test(purchases) ||
+          new RegExp(
+            `\\bforeign\\s+key\\s*\\(\\s*${column}\\s*\\)\\s+references\\s+${target}\\s*\\(\\s*id\\s*\\)`,
+            'i',
+          ).test(purchases),
+        `${column} must reference ${target}.id`,
+      );
+    }
+
+    for (const table of expected.tables) {
+      assert.ok(
+        statements.some((statement) =>
+          new RegExp(`^insert\\s+into\\s+${table}\\b`, 'i').test(statement),
+        ),
+        `INSERT INTO ${table} is required`,
+      );
+    }
+    assert.ok(
+      statements.some(
+        (statement) =>
+          /^select\b[\s\S]*\bfrom\s+products\b/i.test(statement) &&
+          !/\bwhere\b/i.test(statement),
       ),
+      'A query for all products is required',
     );
-    assert.match(
-      source,
-      new RegExp(
-        `SELECT \\* FROM "Purchases" WHERE "customerId" = ${expected.customerId};`,
+    assert.ok(
+      statements.some((statement) =>
+        new RegExp(
+          `^select\\b[\\s\\S]*\\bfrom\\s+products\\b[\\s\\S]*\\bwhere\\s+price\\s*>=\\s*${expected.minimumPrice}\\b`,
+          'i',
+        ).test(statement),
       ),
+      'The minimum-price product query is required',
+    );
+    assert.ok(
+      statements.some((statement) =>
+        new RegExp(
+          `^select\\b[\\s\\S]*\\bfrom\\s+purchases\\b[\\s\\S]*\\bwhere\\s+customerid\\s*=\\s*${expected.customerId}\\b`,
+          'i',
+        ).test(statement),
+      ),
+      'The customer-purchases query is required',
     );
   });
 
@@ -142,10 +369,21 @@ export function registerContracts(candidates) {
         );
       }
     }
-    assert.deepEqual(
-      new Set(model.relationships.map(({ name }) => name)),
-      new Set(fixture.requiredRelationshipNames),
+    assert.equal(
+      new Set(model.relationships.map(({ name }) => name)).size,
+      model.relationships.length,
     );
+    for (const relationship of fixture.requiredRelationships) {
+      assert.ok(
+        model.relationships.some(
+          ({ name, from, to }) =>
+            name === relationship.name &&
+            from === relationship.from &&
+            to === relationship.to,
+        ),
+        `${relationship.name}: ${relationship.from} -> ${relationship.to} is required`,
+      );
+    }
   });
 
   test('03 카디널리티와 Mermaid 사용하기', () => {
@@ -153,29 +391,86 @@ export function registerContracts(candidates) {
     const fixture = readJson(candidates.cardinality.fixture);
     assert.match(source, /^erDiagram/m);
     for (const relation of fixture.relations)
-      assert.ok(source.includes(relation));
+      assert.ok(
+        hasMermaidRelation(source, relation),
+        `${relation} is required`,
+      );
   });
 
   test('04 실전 데이터 모델링', () => {
-    const source = readText(candidates.modeling.diagram);
     const fixture = readJson(candidates.modeling.fixture);
-    for (const entity of fixture.entities) {
-      assert.match(source, new RegExp(`\\b${entity}\\s*\\{[\\s\\S]*?\\bPK\\b`));
-    }
-    for (const relation of fixture.relations)
-      assert.ok(source.includes(relation));
-    for (const qualified of fixture.uniqueFields) {
-      const [entity, field] = qualified.split('.');
+    const assertModel = (source, model) => {
+      assert.match(source, /^erDiagram/m);
+      for (const entity of model.entities) {
+        const body = mermaidEntityBody(source, entity);
+        assert.ok(body, `${entity} entity is required`);
+        assert.match(body, /\bid\s+PK\b/, `${entity}.id PK is required`);
+      }
+      for (const relation of model.relations)
+        assert.ok(
+          hasMermaidRelation(source, relation),
+          `${relation} is required`,
+        );
+      for (const [entity, fields] of Object.entries(model.requiredFields)) {
+        const body = mermaidEntityBody(source, entity);
+        for (const field of fields)
+          assert.match(
+            body,
+            new RegExp(`\\b${escapeRegExp(field)}\\b`),
+            `${entity}.${field} is required`,
+          );
+      }
+      for (const [entity, keyFields] of Object.entries(
+        model.requiredKeyFields ?? {},
+      )) {
+        const body = mermaidEntityBody(source, entity);
+        for (const requirement of keyFields) {
+          const [field, key] = requirement.split(' ');
+          assert.match(
+            body,
+            new RegExp(`\\b${escapeRegExp(field)}\\s+[^\\n]*\\b${key}\\b`),
+            `${entity}.${field} ${key} is required`,
+          );
+        }
+      }
+      for (const qualified of model.uniqueFields) {
+        const [entity, field] = qualified.split('.');
+        assert.match(
+          mermaidEntityBody(source, entity),
+          new RegExp(`\\b${escapeRegExp(field)}\\s+[^\\n]*\\bUK\\b`),
+          `${qualified} must be unique`,
+        );
+      }
+    };
+
+    const movie = readText(candidates.modeling.diagram);
+    assertModel(movie, fixture);
+    for (const constraint of fixture.uniqueConstraints) {
+      const match = constraint.match(/^(\w+)\((\w+),(\w+)\)$/);
+      assert.ok(match);
+      const [, entity, first, second] = match;
       assert.match(
-        source,
-        new RegExp(`${entity}\\s*\\{[\\s\\S]*?${field}\\s+UK`),
+        movie,
+        new RegExp(
+          `%%\\s*UNIQUE\\s+${entity}\\s*\\(\\s*${first}\\s*,\\s*${second}\\s*\\)`,
+          'i',
+        ),
+        `${constraint} is required`,
       );
     }
-    assert.doesNotMatch(source, /Screening \|\|--\|\{ Ticket/);
+    assert.doesNotMatch(movie, /Screening \|\|--\|\{ Ticket/);
+    assert.doesNotMatch(
+      mermaidEntityBody(movie, 'Seat'),
+      /\bseatNumber\s+[^\n]*\bUK\b/,
+    );
+
+    const blog = readText(candidates.modeling.blog);
+    assertModel(blog, fixture.blog);
   });
 
-  test('05 Prisma 프로젝트 준비', () => {
+  test('05 Prisma 프로젝트 준비', async () => {
     const fixture = readJson(candidates.setup.fixture);
+    const workspacePath = fileURLToPath(candidates.setup.workspace);
     const packageJson = readJson(
       new URL('package.json', candidates.setup.workspace),
     );
@@ -183,12 +478,27 @@ export function registerContracts(candidates) {
     assert.equal(packageJson.engines.node, '>=26');
     for (const [name, command] of Object.entries(fixture.scripts))
       assert.equal(packageJson.scripts[name], command);
-    const output = execFileSync(
-      process.execPath,
-      [fileURLToPath(new URL('src/server.js', candidates.setup.workspace))],
-      { encoding: 'utf8' },
+    for (const [name, version] of Object.entries(fixture.devDependencies))
+      assert.equal(packageJson.devDependencies[name], version);
+    for (const environment of ['development', 'production']) {
+      const env = readText(
+        new URL(`env/.env.${environment}`, candidates.setup.workspace),
+      );
+      assert.match(env, new RegExp(`^NODE_ENV=${environment}$`, 'm'));
+      assert.match(env, /^PORT=5001$/m);
+    }
+    const prodOutput = execFileSync(
+      npmExecutable,
+      ['run', 'prod', '--silent'],
+      { cwd: workspacePath, encoding: 'utf8' },
     );
-    assert.equal(output.trim(), fixture.stdout);
+    assert.equal(prodOutput.trim(), fixture.stdout.prod);
+    const devOutput = await runUntilOutput(
+      workspacePath,
+      'dev',
+      fixture.stdout.dev,
+    );
+    assert.match(devOutput, new RegExp(escapeRegExp(fixture.stdout.dev)));
   });
 
   test('06 프로젝트 설정', () => {
@@ -225,6 +535,20 @@ export function registerContracts(candidates) {
       ),
       true,
     );
+    for (const localUrl of [
+      `postgresql://localhost/${fixture.databaseName}`,
+      `postgres://127.0.0.1/${fixture.databaseName}`,
+      `postgresql://[::1]/${fixture.databaseName}`,
+    ]) {
+      assert.equal(
+        candidates.seeding.assertSafeSeedTarget(
+          localUrl,
+          fixture.resetConfirmation,
+          fixture.databaseName,
+        ),
+        true,
+      );
+    }
     assert.throws(() =>
       candidates.seeding.assertSafeSeedTarget(
         'postgresql://database.example/prisma_blog',
@@ -232,6 +556,15 @@ export function registerContracts(candidates) {
         fixture.databaseName,
       ),
     );
+    for (const protocol of ['https:', 'mysql:']) {
+      assert.throws(() =>
+        candidates.seeding.assertSafeSeedTarget(
+          `${protocol}//127.0.0.1/${fixture.databaseName}`,
+          fixture.resetConfirmation,
+          fixture.databaseName,
+        ),
+      );
+    }
     assert.throws(() =>
       candidates.seeding.assertSafeSeedTarget(
         'postgresql://127.0.0.1/production',
@@ -347,21 +680,51 @@ export function registerContracts(candidates) {
     await repository.findPostsWithAuthors();
     assert.equal(users.calls.length, 1);
     assert.equal(posts.calls.length, 1);
-    assert.ok(users.calls[0].args.include.posts);
-    assert.deepEqual(posts.calls[0].args.select.author.select, {
-      id: true,
-      email: true,
-      name: true,
-    });
+    const postsRelation =
+      users.calls[0].args.include?.posts ?? users.calls[0].args.select?.posts;
+    assert.ok(postsRelation, 'posts relation is required');
+    const authorRelation =
+      posts.calls[0].args.include?.author ?? posts.calls[0].args.select?.author;
+    assert.ok(authorRelation, 'author relation is required');
+    if (authorRelation !== true) {
+      assert.deepEqual(authorRelation.select, {
+        id: true,
+        email: true,
+        name: true,
+      });
+    }
   });
 
   test('11 고급 쿼리', () => {
     const fixture = readJson(candidates.advanced.fixture);
     const query = candidates.advanced.buildPostQuery(fixture.input);
     assert.deepEqual(query, fixture.expected);
-    assert.doesNotThrow(() =>
-      candidates.advanced.buildPostQuery({ page: '0', limit: '101' }),
-    );
+    assert.deepEqual(candidates.advanced.buildPostQuery({}), {
+      where: {},
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: 0,
+      take: 10,
+    });
+    const custom = candidates.advanced.buildPostQuery({
+      published: 'false',
+      authorId: '7',
+      sortBy: 'title',
+      order: 'asc',
+    });
+    assert.deepEqual(custom.where, { published: false, authorId: 7 });
+    assert.deepEqual(custom.orderBy, [{ title: 'asc' }, { id: 'asc' }]);
+    for (const invalid of [
+      { page: '0' },
+      { page: '1.5' },
+      { limit: '101' },
+      { limit: 'abc' },
+      { published: 'yes' },
+      { authorId: '0' },
+      { sortBy: 'email' },
+      { order: 'sideways' },
+    ]) {
+      assert.throws(() => candidates.advanced.buildPostQuery(invalid));
+    }
   });
 
   test('12 트랜잭션', async () => {
@@ -372,20 +735,61 @@ export function registerContracts(candidates) {
       fixture.post,
       fixture.comment,
     );
+    assert.deepEqual(prisma.transactions, ['callback']);
+    assert.deepEqual(prisma.operations.slice(-2), [
+      { scope: 'transaction', method: 'post.create' },
+      { scope: 'transaction', method: 'comment.create' },
+    ]);
     assert.equal(prisma.state.posts.length, 1);
     assert.equal(prisma.state.comments[0].postId, created.id);
     await assert.rejects(() =>
       service.createPostWithComment(fixture.post, fixture.failingComment),
     );
+    assert.deepEqual(prisma.transactions, ['callback', 'callback']);
     assert.equal(prisma.state.posts.length, 1);
     assert.equal(prisma.state.comments.length, 1);
-    await service.deletePostWithComments(created.id);
+    const deleted = await service.deletePostWithComments(created.id);
+    assert.deepEqual(prisma.transactions, ['callback', 'callback', 'callback']);
+    assert.deepEqual(prisma.operations.slice(-2), [
+      { scope: 'transaction', method: 'comment.deleteMany' },
+      { scope: 'transaction', method: 'post.delete' },
+    ]);
+    assert.equal(deleted.deletedCommentsCount, 1);
+    assert.equal(deleted.deletedPost.id, created.id);
     assert.deepEqual(prisma.state, { posts: [], comments: [] });
+
+    prisma.state.posts.push({ id: fixture.failingDeleteId, ...fixture.post });
+    prisma.state.comments.push({
+      id: 1,
+      postId: fixture.failingDeleteId,
+      ...fixture.comment,
+    });
+    const beforeFailedDelete = structuredClone(prisma.state);
+    await assert.rejects(() =>
+      service.deletePostWithComments(fixture.failingDeleteId),
+    );
+    assert.deepEqual(prisma.state, beforeFailedDelete);
+    assert.equal(prisma.transactions.length, 4);
+
+    prisma.state.posts = [];
+    prisma.state.comments = [];
+    const transactionCountBeforeBatch = prisma.transactions.length;
     const result = await service.createManyPosts([fixture.post, fixture.post]);
     assert.equal(result.count, 2);
+    assert.equal(prisma.transactions.length, transactionCountBeforeBatch);
+    assert.deepEqual(prisma.operations.at(-1), {
+      scope: 'root',
+      method: 'post.createMany',
+    });
+    const beforeFailedBatch = structuredClone(prisma.state);
+    await assert.rejects(() =>
+      service.createManyPosts([fixture.post, fixture.failingPost]),
+    );
+    assert.deepEqual(prisma.state, beforeFailedBatch);
+    assert.equal(prisma.transactions.length, transactionCountBeforeBatch);
   });
 
-  test('13 인증', async () => {
+  test('13 인증 유틸리티와 미들웨어', async () => {
     const fixture = readJson(candidates.auth.fixture);
     const packageJson = readJson(new URL('../package.json', import.meta.url));
     assert.equal(packageJson.dependencies.bcrypt, '6.0.0');
@@ -488,19 +892,12 @@ export function registerContracts(candidates) {
     );
 
     const cookieCalls = [];
-    const clearCalls = [];
     const cookieResponse = {
       cookie(name, value, options) {
         cookieCalls.push({ name, value, options });
       },
-      clearCookie(name, options) {
-        clearCalls.push({ name, options });
-      },
     };
     candidates.auth.setAuthCookies(cookieResponse, tokens, {
-      secure: fixture.cookie.secure,
-    });
-    candidates.auth.clearAuthCookies(cookieResponse, {
       secure: fixture.cookie.secure,
     });
     const baseCookieOptions = {
@@ -527,17 +924,25 @@ export function registerContracts(candidates) {
         },
       },
     ]);
-    assert.deepEqual(clearCalls, [
-      { name: 'accessToken', options: baseCookieOptions },
-      { name: 'refreshToken', options: baseCookieOptions },
-    ]);
 
     const publicUser = candidates.auth.toPublicUser(fixture.user);
     assert.equal('password' in publicUser, false);
+    assert.equal(fixture.user.password, 'must-not-leak');
 
-    const runAuthentication = (accessToken) => {
-      const request = { cookies: accessToken ? { accessToken } : {} };
+    const databaseUser = { ...fixture.user, name: 'Ada from database' };
+    const runAuthentication = async ({
+      accessToken,
+      refreshToken,
+      findUserById = async (userId) =>
+        userId === fixture.user.id ? databaseUser : null,
+    }) => {
+      const cookies = {};
+      if (accessToken !== undefined) cookies.accessToken = accessToken;
+      if (refreshToken !== undefined) cookies.refreshToken = refreshToken;
+      const request = { cookies };
       let nextCalled = false;
+      const cookieCalls = [];
+      const lookups = [];
       const response = {
         statusCode: 200,
         body: null,
@@ -549,27 +954,83 @@ export function registerContracts(candidates) {
           this.body = body;
           return this;
         },
+        cookie(name, value, options) {
+          cookieCalls.push({ name, value, options });
+          return this;
+        },
       };
-      candidates.auth.authenticate(fixture.secrets)(request, response, () => {
+      await candidates.auth.authenticate(fixture.secrets, {
+        secure: fixture.cookie.secure,
+        async findUserById(userId) {
+          lookups.push(userId);
+          return findUserById(userId);
+        },
+      })(request, response, () => {
         nextCalled = true;
       });
-      return { request, response, nextCalled };
+      return { request, response, nextCalled, cookieCalls, lookups };
     };
 
-    const authenticated = runAuthentication(tokens.accessToken);
+    const authenticated = await runAuthentication({
+      accessToken: tokens.accessToken,
+    });
     assert.equal(authenticated.nextCalled, true);
-    assert.equal(authenticated.request.user.userId, fixture.user.id);
+    assert.equal(authenticated.request.user.id, fixture.user.id);
+    assert.equal(authenticated.request.user.name, databaseUser.name);
+    assert.equal('password' in authenticated.request.user, false);
+    assert.deepEqual(authenticated.lookups, [fixture.user.id]);
+    assert.equal(authenticated.cookieCalls.length, 0);
 
     for (const rejectedToken of [
       undefined,
       tamperedAccess,
       expiredTokens.accessToken,
     ]) {
-      const rejected = runAuthentication(rejectedToken);
+      const rejected = await runAuthentication({ accessToken: rejectedToken });
       assert.equal(rejected.nextCalled, false);
       assert.equal(rejected.response.statusCode, 401);
       assert.equal(typeof rejected.response.body.message, 'string');
     }
+
+    const missingUser = await runAuthentication({
+      accessToken: tokens.accessToken,
+      findUserById: async () => null,
+    });
+    assert.equal(missingUser.nextCalled, false);
+    assert.equal(missingUser.response.statusCode, 401);
+
+    const nearExpiry = candidates.auth.generateTokens(
+      fixture.user,
+      fixture.secrets,
+      { access: '4m', refresh: '2h' },
+    );
+    const withoutRefresh = await runAuthentication({
+      accessToken: nearExpiry.accessToken,
+    });
+    assert.equal(withoutRefresh.nextCalled, true);
+    assert.equal(withoutRefresh.cookieCalls.length, 0);
+    assert.deepEqual(withoutRefresh.lookups, [fixture.user.id]);
+
+    const refreshed = await runAuthentication({
+      accessToken: nearExpiry.accessToken,
+      refreshToken: nearExpiry.refreshToken,
+    });
+    assert.equal(refreshed.nextCalled, true);
+    assert.equal(refreshed.cookieCalls.length, 2);
+    assert.deepEqual(refreshed.lookups, [fixture.user.id, fixture.user.id]);
+
+    const otherUserTokens = candidates.auth.generateTokens(
+      { ...fixture.user, id: 2 },
+      fixture.secrets,
+      { access: '4m', refresh: '2h' },
+    );
+    const mismatched = await runAuthentication({
+      accessToken: nearExpiry.accessToken,
+      refreshToken: otherUserTokens.refreshToken,
+    });
+    assert.equal(mismatched.nextCalled, true);
+    assert.equal(mismatched.cookieCalls.length, 0);
+    assert.deepEqual(mismatched.lookups, [fixture.user.id]);
   });
 
   test('14 유효성 검사', () => {
@@ -578,6 +1039,12 @@ export function registerContracts(candidates) {
       candidates.validation.signupSchema.safeParse(fixture.validSignup).success,
       true,
     );
+    const signupWithoutName = { ...fixture.validSignup };
+    delete signupWithoutName.name;
+    const optionalName =
+      candidates.validation.signupSchema.safeParse(signupWithoutName);
+    assert.equal(optionalName.success, true);
+    assert.deepEqual(optionalName.data, signupWithoutName);
     for (const invalid of fixture.invalidSignup) {
       assert.equal(
         candidates.validation.signupSchema.safeParse(invalid).success,
@@ -654,23 +1121,25 @@ export function registerContracts(candidates) {
 
   test('15 커스텀 에러와 검증 리팩터링', () => {
     const fixture = readJson(candidates.errors.fixture);
-    for (const value of fixture.valid) {
-      const req = { params: { id: value } };
-      let nextValue;
-      candidates.errors.validateIdParam('id', '게시글')(req, {}, (error) => {
-        nextValue = error ?? null;
-      });
-      assert.equal(nextValue, null);
-      assert.equal(req.params.id, Number(value));
-    }
-    for (const value of fixture.invalid) {
-      const req = { params: { id: value } };
-      let captured;
-      candidates.errors.validateIdParam('id', '게시글')(req, {}, (error) => {
-        captured = error;
-      });
-      assert.ok(captured instanceof candidates.errors.HttpError);
-      assert.equal(captured.status, 400);
+    for (const { name, label } of fixture.params) {
+      for (const value of fixture.valid) {
+        const req = { params: { [name]: value } };
+        let nextValue;
+        candidates.errors.validateIdParam(name, label)(req, {}, (error) => {
+          nextValue = error ?? null;
+        });
+        assert.equal(nextValue, null);
+        assert.equal(req.params[name], Number(value));
+      }
+      for (const value of fixture.invalid) {
+        const req = { params: { [name]: value } };
+        let captured;
+        candidates.errors.validateIdParam(name, label)(req, {}, (error) => {
+          captured = error;
+        });
+        assert.ok(captured instanceof candidates.errors.HttpError);
+        assert.equal(captured.status, 400);
+      }
     }
     const handleError = (error) => {
       const response = {

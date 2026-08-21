@@ -11,8 +11,8 @@ export function parseConfig(env) {
   const port = Number(env.PORT);
   const databaseUrl = env.DATABASE_URL?.trim();
 
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error('PORT must be an integer between 1 and 65535');
+  if (!Number.isInteger(port) || port < 1000 || port > 65535) {
+    throw new Error('PORT must be an integer between 1000 and 65535');
   }
   databaseUrlSchema.parse(databaseUrl);
 

@@ -19,7 +19,7 @@
       ],
       "published": true
     },
-    "orderBy": { "createdAt": "desc" },
+    "orderBy": [{ "createdAt": "desc" }, { "id": "desc" }],
     "skip": 5,
     "take": 5
   }

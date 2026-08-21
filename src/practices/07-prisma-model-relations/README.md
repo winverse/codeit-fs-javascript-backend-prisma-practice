@@ -15,10 +15,16 @@ Prisma 7의 `prisma-client` generator와 PostgreSQL datasource를 유지하면�
 npm run check:07
 ```
 
-답안 schema 자체는 다음 명령으로 Prisma 7 parser 검증을 실행할 수 있습니다.
+작성한 학생 schema 자체는 다음 명령으로 Prisma 7 parser 검증을 실행할 수 있습니다.
 
 ```bash
 npm run verify:prisma-schema
+```
+
+직접 구현을 마친 뒤 정답 schema도 확인하려면 다음 명령을 사용합니다.
+
+```bash
+npx prisma validate --schema src/practices/07-prisma-model-relations/answers/prisma/schema.prisma
 ```
 
 ## 성공·실패 기준

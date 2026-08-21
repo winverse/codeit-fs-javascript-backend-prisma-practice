@@ -9,6 +9,16 @@ Prisma user delegate를 사용하는 Repository의 생성·전체 조회·단건
 - 수정: `src/userRepository.js`
 - 호출 입력: `fixtures/users.json`
 
+`createUserRepository(prisma)`는 다음 메서드가 있는 객체를 반환합니다.
+
+- `create(data)` → `prisma.user.create()`
+- `findAll()` → `prisma.user.findMany()`
+- `findById(id)` → `prisma.user.findUnique()`
+- `update(id, data)` → `prisma.user.update()`
+- `remove(id)` → `prisma.user.delete()`
+
+ID를 받는 메서드는 문자열 ID를 숫자로 변환해 `where: { id }`에 전달합니다.
+
 ## 실행 진입점
 
 `npm run check:09`

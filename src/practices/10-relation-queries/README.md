@@ -9,6 +9,13 @@
 - 수정: `src/relationRepository.js`
 - 조회 계약: `fixtures/expected.json`
 
+`createRelationRepository(prisma)`는 다음 메서드가 있는 객체를 반환합니다.
+
+- `findUsersWithPosts()`는 `prisma.user.findMany()` 한 번으로 `posts` 관계를 포함합니다.
+- `findPostsWithAuthors()`는 `prisma.post.findMany()` 한 번으로 `author` 관계를 포함합니다.
+
+관계 전체를 포함하는 `include`와 관계 필드를 고르는 중첩 `select` 중 하나를 사용할 수 있습니다. 중첩 `select`를 사용하면 작성자의 `id`, `email`, `name`은 모두 선택합니다.
+
 ## 실행 진입점
 
 `npm run check:10`

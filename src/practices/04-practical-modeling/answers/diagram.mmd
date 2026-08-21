@@ -7,6 +7,7 @@ erDiagram
   Booking {
     Int id PK
     Int customerId FK
+    DateTime bookingTime
   }
   Ticket {
     Int id PK
@@ -23,16 +24,20 @@ erDiagram
   Movie {
     Int id PK
     String title
+    Int durationInMinutes
   }
   Theater {
     Int id PK
     String name
+    Int totalSeats
   }
   Seat {
     Int id PK
     Int theaterId FK
-    String seatNumber UK
+    String seatNumber
   }
+
+  %% UNIQUE Seat(theaterId, seatNumber)
 
   Customer ||--o{ Booking : "예매한다"
   Booking ||--|{ Ticket : "포함한다"

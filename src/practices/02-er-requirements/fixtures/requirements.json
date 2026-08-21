@@ -6,5 +6,9 @@
     "Department": ["id", "name"],
     "Course": ["id", "title", "professorId"]
   },
-  "requiredRelationshipNames": ["belongsTo", "teaches", "enrolls"]
+  "requiredRelationships": [
+    { "name": "belongsTo", "from": "Professor", "to": "Department" },
+    { "name": "teaches", "from": "Professor", "to": "Course" },
+    { "name": "enrolls", "from": "Student", "to": "Course" }
+  ]
 }

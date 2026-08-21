@@ -9,14 +9,15 @@ export function createPostTransactions(prisma) {
     },
     deletePostWithComments(postId) {
       return prisma.$transaction(async (tx) => {
-        await tx.comment.deleteMany({ where: { postId } });
-        return tx.post.delete({ where: { id: postId } });
+        const { count: deletedCommentsCount } = await tx.comment.deleteMany({
+          where: { postId },
+        });
+        const deletedPost = await tx.post.delete({ where: { id: postId } });
+        return { deletedPost, deletedCommentsCount };
       });
     },
     createManyPosts(posts) {
-      return prisma.$transaction(async (tx) =>
-        tx.post.createMany({ data: posts }),
-      );
+      return prisma.post.createMany({ data: posts });
     },
   };
 }

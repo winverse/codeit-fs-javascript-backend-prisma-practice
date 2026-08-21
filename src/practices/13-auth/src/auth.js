@@ -24,8 +24,6 @@ export function verifyToken(_token, _tokenType, _secrets) {
 
 export function setAuthCookies(_res, _tokens, _options) {}
 
-export function clearAuthCookies(_res, _options) {}
-
 export function authenticate(_secrets) {
   return (_req, _res, next) => next();
 }

@@ -6,7 +6,7 @@
     { "name": "Course", "attributes": ["id", "title", "professorId"] }
   ],
   "relationships": [
-    { "from": "Department", "to": "Professor", "name": "belongsTo" },
+    { "from": "Professor", "to": "Department", "name": "belongsTo" },
     { "from": "Professor", "to": "Course", "name": "teaches" },
     { "from": "Student", "to": "Course", "name": "enrolls" }
   ]

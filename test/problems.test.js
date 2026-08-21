@@ -11,6 +11,7 @@ import { createPostTransactions } from '../src/practices/12-transactions/src/pos
 import * as auth from '../src/practices/13-auth/src/auth.js';
 import * as validation from '../src/practices/14-validation/src/schemas.js';
 import * as errors from '../src/practices/15-error-refactor/src/errors.js';
+import { assertAllowedSqlStatements } from '../scripts/sql-safety.js';
 
 const practice = (path) => new URL(`../src/practices/${path}`, import.meta.url);
 
@@ -18,6 +19,7 @@ registerContracts({
   sql: {
     task: practice('01-sql-basics/task.sql'),
     fixture: practice('01-sql-basics/fixtures/expected.json'),
+    assertAllowedSqlStatements,
   },
   er: {
     model: practice('02-er-requirements/model.json'),
@@ -29,6 +31,7 @@ registerContracts({
   },
   modeling: {
     diagram: practice('04-practical-modeling/diagram.mmd'),
+    blog: practice('04-practical-modeling/blog-diagram.mmd'),
     fixture: practice('04-practical-modeling/fixtures/constraints.json'),
   },
   setup: {

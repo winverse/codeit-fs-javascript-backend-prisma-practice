@@ -18,7 +18,7 @@ Node.js 26 이상과 npm 11을 사용합니다.
 
 ## 독립 진행 방식
 
-각 실습은 다른 실습의 결과에 의존하지 않습니다. 원하는 폴더의 `README.md`를 읽고 안내된 파일을 수정한 다음 해당 명령을 실행하세요. 기본 확인 명령은 새 객체와 주입형 fixture만 사용하므로 개인 데이터베이스나 외부 서비스에 연결하지 않습니다. SQL 답안은 별도의 명시적 명령으로 폐기 가능한 로컬 PostgreSQL 18 데이터베이스에서도 확인할 수 있습니다.
+각 실습은 다른 실습의 결과에 의존하지 않습니다. 원하는 폴더의 `README.md`를 읽고 안내된 파일을 수정한 다음 해당 명령을 실행하세요. 기본 확인 명령은 새 객체와 주입형 fixture만 사용하므로 개인 데이터베이스나 외부 서비스에 연결하지 않습니다. 작성한 SQL은 별도의 명시적 명령으로 폐기 가능한 로컬 PostgreSQL 18 데이터베이스에서도 확인할 수 있습니다.
 
 | 실습                        | 문제 폴더                                 | 확인 명령          |
 | --------------------------- | ----------------------------------------- | ------------------ |
@@ -34,7 +34,7 @@ Node.js 26 이상과 npm 11을 사용합니다.
 | 관계 쿼리                   | `src/practices/10-relation-queries`       | `npm run check:10` |
 | 고급 쿼리                   | `src/practices/11-advanced-queries`       | `npm run check:11` |
 | 트랜잭션                    | `src/practices/12-transactions`           | `npm run check:12` |
-| 인증                        | `src/practices/13-auth`                   | `npm run check:13` |
+| 인증 유틸리티와 미들웨어    | `src/practices/13-auth`                   | `npm run check:13` |
 | 유효성 검사                 | `src/practices/14-validation`             | `npm run check:14` |
 | 커스텀 에러와 검증 리팩터링 | `src/practices/15-error-refactor`         | `npm run check:15` |
 
