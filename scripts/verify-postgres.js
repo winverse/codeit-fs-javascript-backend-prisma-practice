@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import { assertAllowedSqlStatements } from './sql-safety.js';
+import {
+  assertAllowedSqlStatements,
+  SQL_EXECUTION_TIMEOUT_MS,
+} from './sql-safety.js';
 
 const { Client } = pg;
 const root = new URL('../src/practices/01-sql-basics/', import.meta.url);
@@ -57,6 +60,16 @@ async function expectPgError(statement, code) {
 try {
   await client.connect();
   connected = true;
+  await client.query('SET standard_conforming_strings = on');
+  await client.query(`SET statement_timeout = ${SQL_EXECUTION_TIMEOUT_MS}`);
+  const stringSetting = await client.query(
+    "SELECT current_setting('standard_conforming_strings') AS value",
+  );
+  assert.equal(stringSetting.rows[0].value, 'on');
+  const timeout = await client.query(
+    "SELECT setting::int AS timeout_ms FROM pg_settings WHERE name = 'statement_timeout'",
+  );
+  assert.equal(timeout.rows[0].timeout_ms, SQL_EXECUTION_TIMEOUT_MS);
   const server = await client.query(
     "SELECT current_setting('server_version_num')::int AS version_num, current_database() AS database_name",
   );
@@ -73,7 +86,10 @@ try {
     'SELECT pg_current_xact_id_if_assigned()::text AS transaction_id',
   );
   assert.ok(transactionBefore.rows[0].transaction_id);
-  await client.query(sql);
+  await client.query({
+    text: sql,
+    query_timeout: SQL_EXECUTION_TIMEOUT_MS + 500,
+  });
   const transactionAfter = await client.query(
     'SELECT pg_current_xact_id_if_assigned()::text AS transaction_id',
   );
@@ -123,7 +139,8 @@ try {
     '23505',
   );
   await expectPgError(
-    `INSERT INTO "Customers" ("email", "name") VALUES ('customer1@test.com', '중복')`,
+    `INSERT INTO "Customers" ("email", "name")
+     VALUES ((SELECT "email" FROM "Customers" ORDER BY "id" LIMIT 1), '중복')`,
     '23505',
   );
   await expectPgError(

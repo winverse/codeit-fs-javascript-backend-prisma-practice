@@ -15,4 +15,4 @@ Prisma 7 Client와 PostgreSQL용 fixture로 삭제 가능한 로컬 데이터베
 
 ## 성공·실패 기준
 
-`postgresql:` 또는 `postgres:` 프로토콜·로컬 host·정확한 데이터베이스 이름·`--allow-reset=prisma_blog` 확인을 모두 통과한 경우에만 Post→User 삭제를 하나의 `$transaction()`으로 실행하고, 사용자 5명과 각 사용자의 게시글을 생성하면 성공합니다. 다른 프로토콜·원격 host·다른 DB 허용, 확인 인자 누락, 삭제 순서 오류, 사용자·게시글 누락은 실패합니다.
+`assertSafeSeedTarget()`은 `postgresql:` 또는 `postgres:` 프로토콜·로컬 host·정확한 데이터베이스 이름·`--allow-reset=prisma_blog` 확인을 모두 통과하면 `true`를 반환하고, 하나라도 다르면 데이터를 변경하기 전에 오류를 던집니다. 안전 검사를 통과한 경우에만 Post→User 삭제를 하나의 `$transaction()`으로 실행하고, 사용자 5명과 각 사용자의 게시글을 생성하면 성공합니다. 다른 프로토콜·원격 host·다른 DB 허용, 확인 인자 누락, 삭제 순서 오류, 사용자·게시글 누락은 실패합니다.

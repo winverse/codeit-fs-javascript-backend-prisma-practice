@@ -18,7 +18,7 @@ export async function comparePassword(password, hashedPassword) {
 }
 
 export function generateAccessToken(user, accessSecret, expiresIn = '15m') {
-  return jwt.sign({ userId: user.id, name: user.name }, accessSecret, {
+  return jwt.sign({ userId: user.id }, accessSecret, {
     algorithm: 'HS256',
     expiresIn,
   });

@@ -232,10 +232,10 @@ export function registerContracts(candidates) {
     assert.equal(candidates.sql.assertAllowedSqlStatements(source), true);
     assert.equal(
       candidates.sql.assertAllowedSqlStatements(`
-        SELECT 'COMMIT;';
-        SELECT $$END;$$;
-        SELECT 1 /* outer /* ROLLBACK; */ comment */;
-        SELECT "COMMIT";
+        INSERT INTO "Customers" ("email", "name")
+        VALUES ('commit@test.com', 'END;');
+        SELECT * FROM "Products"
+        WHERE "name" = 'COMMIT;' /* outer /* ROLLBACK; */ comment */;
       `),
       true,
     );
@@ -246,6 +246,25 @@ export function registerContracts(candidates) {
       'START TRANSACTION;',
       "PREPARE TRANSACTION 'practice';",
       'SET search_path TO public; COMMIT;',
+      'CREATE TABLE public."Customers" ("id" INTEGER);',
+      'INSERT INTO public."Customers" ("id") VALUES (1);',
+      'WITH rows AS (SELECT * FROM "Products") SELECT * FROM rows;',
+      'SELECT pg_sleep(10);',
+      "SELECT set_config('search_path', 'public', false);",
+      'SELECT * FROM "Products" FOR UPDATE;',
+      'SELECT * FROM "Products" UNION SELECT * FROM "Products";',
+      'SELECT * INTO "Customers" FROM "Products";',
+      'SELECT * FROM "pg_authid";',
+      'INSERT INTO "Customers" ("email", "name") SELECT "email", "name" FROM "Customers";',
+      'CREATE TABLE "Customers" ("id" INTEGER) AS SELECT * FROM "Products";',
+      'CREATE TABLE "Customers" ("id" INTEGER, "payload" TEXT);',
+      'SELECT * FROM "Products" AS foo$tag$; COMMIT; SELECT * FROM "Products" AS bar$tag$;',
+      'INSERT INTO "Customers" ("email", "name") VALUES (E\'one\', \'two\');',
+      'INSERT INTO "Customers" ("email", "name") VALUES (\'foo\\\\\', \', \', \'); COMMIT; SELECT 1; --\');',
+      '/* unterminated',
+      Array.from({ length: 17 }, () => 'SELECT * FROM "Products";').join('\n'),
+      ' '.repeat(32 * 1024 + 1),
+      '',
     ]) {
       assert.throws(() => candidates.sql.assertAllowedSqlStatements(unsafeSql));
     }
@@ -823,9 +842,13 @@ export function registerContracts(candidates) {
       fixture.secrets,
     );
     assert.equal(accessPayload.userId, fixture.user.id);
-    assert.equal(accessPayload.name, fixture.user.name);
     assert.equal(refreshPayload.userId, fixture.user.id);
-    assert.equal('name' in refreshPayload, false);
+    const customClaims = (payload) =>
+      Object.keys(payload)
+        .filter((key) => !['iat', 'exp'].includes(key))
+        .sort();
+    assert.deepEqual(customClaims(accessPayload), ['userId']);
+    assert.deepEqual(customClaims(refreshPayload), ['userId']);
     assert.equal(
       candidates.auth.verifyToken(
         tokens.accessToken,
